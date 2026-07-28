@@ -1,0 +1,6 @@
+id,amount,email,transaction_date,status,country
+1,150.50,client1@example.com,2026-01-05,completed,MA
+2,-20.00,client2@example.com,2026-01-05,failed,MA
+3,3200.00,badly_formatted_email,2026-01-06,completed,FR
+4,45.00,client4@example.com,2026-01-06,completed,MA
+5,0.00,client5@example.com,2026-01-07,pending,ES

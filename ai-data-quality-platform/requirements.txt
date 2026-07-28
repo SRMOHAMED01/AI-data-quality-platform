@@ -1,0 +1,37 @@
+# requirements.txt
+# ==================
+# Dépendances Python du projet. Complète les versions exactes au fur et
+# à mesure (fige-les avec `pip freeze > requirements.txt` avant de livrer
+# le projet final, pour garantir la reproductibilité).
+
+# --- LLM ---
+openai>=1.0.0
+python-dotenv>=1.0.0
+tenacity>=8.2.0          # pour le retry sur les appels API
+
+# --- Data processing ---
+pandas>=2.0.0
+numpy>=1.24.0
+
+# --- Machine Learning ---
+scikit-learn>=1.3.0
+joblib>=1.3.0
+
+# --- Base de données ---
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0   # driver PostgreSQL
+
+# --- Dashboard ---
+streamlit>=1.30.0
+plotly>=5.18.0            # optionnel, pour des graphiques plus riches que st.scatter_chart
+
+# --- Alerting ---
+requests>=2.31.0
+
+# --- Orchestration (si tu installes Airflow en local hors Docker) ---
+# apache-airflow>=2.8.0   # décommenter si besoin (souvent installé via image Docker dédiée à la place)
+
+# --- Tests & qualité de code ---
+pytest>=7.4.0
+pytest-cov>=4.1.0
+ruff>=0.1.0                # linter rapide (alternative à flake8)

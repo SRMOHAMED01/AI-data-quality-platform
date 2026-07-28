@@ -1,0 +1,57 @@
+# ci.yml
+# ========
+#
+# RÔLE DE CE FICHIER
+# -------------------
+# Pipeline CI GitHub Actions : à chaque push/pull request, exécute
+# automatiquement le linting et les tests unitaires, pour garantir que
+# rien n'est cassé avant de merger. C'est ce qui montre une vraie
+# rigueur d'ingénierie aux recruteurs qui regardent ton GitHub.
+#
+# CE QU'IL FAUT IMPLÉMENTER
+# --------------------------
+# 1. Déclencheurs (`on:`) : sur `push` et `pull_request`, branche `main`.
+#
+# 2. Un job `lint-and-test` qui :
+#    - checkout le code (`actions/checkout@v4`)
+#    - installe Python (`actions/setup-python@v5`, version 3.10 ou 3.11)
+#    - installe les dépendances (`pip install -r requirements.txt`)
+#    - lance un linter (ex: `flake8` ou `ruff`) sur `src/`
+#    - lance les tests (`pytest tests/ -v --cov=src`)
+#    - (bonus) upload le rapport de couverture de code
+#
+# 3. IMPORTANT : les tests ne doivent PAS avoir besoin d'une vraie clé
+#    API LLM ni d'une vraie base PostgreSQL pour tourner en CI — c'est
+#    pour ça que tests/test_llm_parser.py mocke l'appel LLM, et que
+#    test_rule_engine.py / test_anomaly_detector.py utilisent des
+#    données en mémoire plutôt qu'une vraie DB.
+#
+# SQUELETTE À COMPLÉTER (structure YAML attendue)
+# ----------------------------------------------------
+# name: CI
+#
+# on:
+#   push:
+#     branches: [main]
+#   pull_request:
+#     branches: [main]
+#
+# jobs:
+#   lint-and-test:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: actions/setup-python@v5
+#         with:
+#           python-version: "3.11"
+#       - name: Install dependencies
+#         run: pip install -r requirements.txt
+#       - name: Lint
+#         run: ruff check src/
+#       - name: Run tests
+#         run: pytest tests/ -v
+#
+# POINTS D'ATTENTION
+# -------------------
+# - Ajoute un badge "build passing" dans le README une fois que ce
+#   workflow tourne correctement — ça se voit tout de suite sur GitHub.

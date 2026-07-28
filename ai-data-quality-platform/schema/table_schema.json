@@ -1,0 +1,37 @@
+{
+  "_comment_a_lire_avant": "Ce fichier décrit le schéma de la table + une description métier de chaque colonne. C'est CE fichier qui sera envoyé au LLM pour générer les règles de validation. Complète/adapte les colonnes selon ton vrai dataset.",
+
+  "table_name": "transactions",
+  "columns": [
+    {
+      "column": "id",
+      "type": "integer",
+      "description": "Identifiant unique de la transaction, doit être unique et non nul."
+    },
+    {
+      "column": "amount",
+      "type": "float",
+      "description": "Montant de la transaction en MAD. Doit toujours être positif ou nul, ne doit jamais être manquant."
+    },
+    {
+      "column": "email",
+      "type": "string",
+      "description": "Adresse email du client. Doit respecter un format email valide (contenir @ et un domaine)."
+    },
+    {
+      "column": "transaction_date",
+      "type": "date",
+      "description": "Date de la transaction. Ne doit jamais être une date future."
+    },
+    {
+      "column": "status",
+      "type": "string",
+      "description": "Statut de la transaction. Valeurs autorisées : completed, failed, pending."
+    },
+    {
+      "column": "country",
+      "type": "string",
+      "description": "Code pays ISO à 2 lettres du client (ex: MA, FR, ES)."
+    }
+  ]
+}

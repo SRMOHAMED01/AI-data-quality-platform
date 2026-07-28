@@ -1,0 +1,77 @@
+# docker-compose.yml
+# =====================
+#
+# RÔLE DE CE FICHIER
+# -------------------
+# Orchestrer tous les services du projet en local avec une seule
+# commande (`docker compose up`) : l'application Python, la base
+# PostgreSQL, et (optionnel) Airflow.
+#
+# SERVICES À DÉFINIR
+# --------------------
+# 1. `db` :
+#    - image: postgres:16
+#    - variables d'env : POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
+#      (récupérées depuis .env)
+#    - volume persistant pour ne pas perdre les données entre redémarrages
+#    - port exposé : 5432
+#
+# 2. `app` :
+#    - build: à partir du Dockerfile du projet
+#    - dépend de `db` (depends_on)
+#    - monte le code en volume pour le dev (`./:/app`)
+#    - variables d'env chargées depuis `.env`
+#    - commande par défaut : lance main.py OU reste en attente pour
+#      exécuter des commandes manuellement pendant le dev
+#
+# 3. `dashboard` :
+#    - même image que `app`, mais commande différente :
+#      `streamlit run dashboard/app.py --server.port=8501 --server.address=0.0.0.0`
+#    - port exposé : 8501
+#
+# 4. (Bonus, si tu vas jusqu'à Airflow) `airflow-webserver` +
+#    `airflow-scheduler` : Airflow nécessite plusieurs services pour
+#    tourner correctement — pour débuter, tu peux utiliser l'image
+#    officielle `apache/airflow` avec SQLite en backend (mode standalone,
+#    plus simple), et migrer vers Postgres plus tard.
+#
+# SQUELETTE À COMPLÉTER (structure attendue)
+# ----------------------------------------------
+# services:
+#   db:
+#     image: postgres:16
+#     environment:
+#       POSTGRES_USER: ${POSTGRES_USER}
+#       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+#       POSTGRES_DB: ${POSTGRES_DB}
+#     ports:
+#       - "5432:5432"
+#     volumes:
+#       - pgdata:/var/lib/postgresql/data
+#
+#   app:
+#     build: .
+#     depends_on:
+#       - db
+#     env_file: .env
+#     volumes:
+#       - ./:/app
+#
+#   dashboard:
+#     build: .
+#     command: streamlit run dashboard/app.py --server.port=8501 --server.address=0.0.0.0
+#     depends_on:
+#       - db
+#     env_file: .env
+#     ports:
+#       - "8501:8501"
+#
+# volumes:
+#   pgdata:
+#
+# POINTS D'ATTENTION
+# -------------------
+# - Ne jamais commit `.env` — utilise `.env.example` pour documenter
+#   les variables attendues sans exposer de vraies valeurs.
+# - `docker compose up --build` pour tout lancer en une commande —
+#   c'est exactement ce qu'un recruteur/évaluateur testera en premier.

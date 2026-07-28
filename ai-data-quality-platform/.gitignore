@@ -1,0 +1,35 @@
+# Environnement
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+
+# Données volumineuses (garder juste sample_transactions.csv)
+data/raw/*
+!data/raw/README.md
+
+# Modèles ML entraînés (trop lourds pour Git, à régénérer via train_model.py)
+models/
+*.joblib
+*.pkl
+
+# Rapports générés
+report/*.json
+report/*.html
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Airflow
+airflow/logs/
+airflow/airflow.db
+
+# Streamlit
+.streamlit/

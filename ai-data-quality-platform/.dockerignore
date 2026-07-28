@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.git/
+.env
+data/raw/*
+!data/raw/README.md
+models/
+*.log
