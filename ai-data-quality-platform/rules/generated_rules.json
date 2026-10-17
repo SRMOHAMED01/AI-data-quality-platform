@@ -1,0 +1,26 @@
+[
+  {
+    "column": "amount",
+    "rule_sql": "amount >= 0",
+    "description": "Amount must be positive or zero",
+    "severity": "high"
+  },
+  {
+    "column": "email",
+    "rule_sql": "email.str.contains('@') and email.str.contains('.')",
+    "description": "Email must have @ and domain",
+    "severity": "medium"
+  },
+  {
+    "column": "status",
+    "rule_sql": "status.isin(['completed','failed','pending'])",
+    "description": "Status must be valid",
+    "severity": "medium"
+  },
+  {
+    "column": "country",
+    "rule_sql": "country.str.len() == 2",
+    "description": "Country code length 2",
+    "severity": "low"
+  }
+]

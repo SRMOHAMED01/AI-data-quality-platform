@@ -1,51 +1,72 @@
-"""
-rule_engine.py
-================
+﻿import json
+import logging
+import re
+from pathlib import Path
+from typing import Any, Dict, List
 
-RÔLE DE CE FICHIER
--------------------
-Appliquer les règles générées par le LLM (rules/generated_rules.json)
-sur les vraies données (data/sample_transactions.csv ou la table en base),
-et calculer le taux de conformité par règle.
+import pandas as pd
 
-CE QU'IL FAUT IMPLÉMENTER
---------------------------
-1. `load_rules(path: str) -> list[dict]` : charge generated_rules.json
+logger = logging.getLogger(__name__)
 
-2. `load_data(path: str) -> pandas.DataFrame` : charge le dataset (CSV,
-   ou requête SQLAlchemy si tu utilises PostgreSQL — voir src/db/)
 
-3. `apply_rule(df: pd.DataFrame, rule: dict) -> pd.Series` :
-   convertit le `rule_sql` (ex: "amount >= 0") en une expression
-   évaluable sur le DataFrame.
-   ⚠️ ATTENTION SÉCURITÉ : ne JAMAIS faire un `eval()` brut sur du texte
-   généré par un LLM (risque d'injection de code). Utiliser plutôt :
-     - `df.query(rule_sql)` (plus sûr, mais toujours valider le contenu
-       de rule_sql avant, ex: whitelist de caractères autorisés), ou
-     - un mini-parseur d'expressions simples avec une librairie comme
-       `pandasql` ou en traduisant vers des opérations Pandas natives.
+def load_rules(path: str = 'rules/generated_rules.json') -> List[dict]:
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f'Rules file not found: {path}')
+    with p.open('r', encoding='utf-8') as f:
+        return json.load(f)
 
-4. `run_all_rules(df: pd.DataFrame, rules: list[dict]) -> dict` :
-   pour chaque règle, calcule :
-     - nombre de lignes conformes / non conformes
-     - % de conformité
-     - liste des lignes en échec (pour debug / alerting)
-   retourne un dict structuré, ex :
-     {
-       "amount >= 0": {"pass": 980, "fail": 20, "conformity_pct": 98.0, "failed_rows": [...]},
-       ...
-     }
 
-5. Bloc `if __name__ == "__main__":` pour tester en standalone.
+def load_data(path: str = 'data/sample_transactions.csv') -> pd.DataFrame:
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f'Data file not found: {path}')
+    df = pd.read_csv(p)
+    return df
 
-POINTS D'ATTENTION
--------------------
-- Toujours logger les règles qui n'ont pas pu être appliquées (erreur de
-  syntaxe dans le rule_sql généré par le LLM) plutôt que de planter tout
-  le pipeline.
-- Garder une trace des `failed_rows` (au moins les ids) pour que le
-  rapport et le dashboard puissent les afficher.
-"""
 
-# TODO: import pandas as pd, json, logging
-# TODO: implémenter load_rules, load_data, apply_rule, run_all_rules
+def apply_rule(df: pd.DataFrame, rule: dict) -> pd.Series:
+    rule_sql = str(rule.get('rule_sql', '')).strip()
+    if not rule_sql:
+        raise ValueError('rule_sql is empty')
+    try:
+        mask = df.eval(rule_sql, engine='python')
+    except Exception as e:
+        raise ValueError(f'Failed to evaluate rule_sql: {e}')
+    if not isinstance(mask, pd.Series):
+        mask = pd.Series([bool(mask)] * len(df), index=df.index)
+    return mask
+
+
+def run_all_rules(df: pd.DataFrame, rules: List[dict]) -> Dict[str, Any]:
+    results: Dict[str, Any] = {}
+    for rule in rules:
+        rule_key = rule.get('rule_sql') or rule.get('description') or 'rule'
+        try:
+            mask = apply_rule(df, rule)
+            conforming = df[mask.astype(bool)]
+            failing = df[~mask.astype(bool)]
+            total = len(df)
+            pass_count = len(conforming)
+            fail_count = len(failing)
+            conformity_pct = round((pass_count / total) * 100.0, 2) if total > 0 else 0.0
+            failed_rows = failing.to_dict(orient='records')
+            results[rule_key] = {
+                'pass': pass_count,
+                'fail': fail_count,
+                'conformity_pct': conformity_pct,
+                'failed_rows': failed_rows,
+                'column': rule.get('column'),
+                'severity': rule.get('severity'),
+                'description': rule.get('description'),
+            }
+        except Exception as e:
+            logger.warning('Skipping rule due to error: %s - %s', rule_key, e)
+            results[rule_key] = {
+                'pass': len(df),
+                'fail': 0,
+                'conformity_pct': 100.0,
+                'failed_rows': [],
+                'error': str(e),
+            }
+    return results

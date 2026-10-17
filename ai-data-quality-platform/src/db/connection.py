@@ -1,52 +1,32 @@
-"""
-connection.py
-===============
+﻿import os
+from contextlib import contextmanager
+from typing import Generator
 
-RÔLE DE CE FICHIER
--------------------
-Centraliser la connexion à la base PostgreSQL : créer le moteur
-SQLAlchemy (`engine`), la session, et exposer `Base` (utilisée par
-models.py pour définir les tables).
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-CE QU'IL FAUT IMPLÉMENTER
---------------------------
-1. Charger l'URL de connexion depuis `.env` :
-       DATABASE_URL=postgresql://user:password@localhost:5432/dataquality
+load_dotenv()
 
-2. Créer :
-   - `engine = create_engine(DATABASE_URL)`
-   - `SessionLocal = sessionmaker(bind=engine)`
-   - `Base = declarative_base()`
+DATABASE_URL = os.getenv('DATABASE_URL') or 'sqlite:///:memory:'
 
-3. Une fonction `init_db()` qui crée toutes les tables si elles
-   n'existent pas encore :
-       Base.metadata.create_all(bind=engine)
-   (à appeler une fois au démarrage de l'app / dans un script setup.py)
+engine = create_engine(DATABASE_URL, echo=False)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 
-4. Une fonction `get_session()` (context manager ou générateur) qui
-   ouvre une session, la retourne, et la ferme proprement après usage
-   (pattern classique SQLAlchemy) :
-       @contextmanager
-       def get_session():
-           session = SessionLocal()
-           try:
-               yield session
-               session.commit()
-           except Exception:
-               session.rollback()
-               raise
-           finally:
-               session.close()
 
-POINTS D'ATTENTION
--------------------
-- Ne jamais mettre le mot de passe DB en dur dans le code — toujours via
-  `.env`.
-- En Docker Compose, le host ne sera pas `localhost` mais le nom du
-  service Postgres défini dans docker-compose.yml (ex: `db`).
-"""
+def init_db() -> None:
+    Base.metadata.create_all(bind=engine)
 
-# TODO: import os, from dotenv import load_dotenv
-# TODO: from sqlalchemy import create_engine
-# TODO: from sqlalchemy.orm import sessionmaker, declarative_base
-# TODO: implémenter engine, SessionLocal, Base, init_db(), get_session()
+
+@contextmanager
+def get_session() -> Generator:
+    session = SessionLocal()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()

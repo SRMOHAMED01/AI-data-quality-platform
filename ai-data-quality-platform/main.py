@@ -1,72 +1,64 @@
-"""
-main.py
-========
+﻿import logging
+import os
+from pathlib import Path
 
-RÔLE DE CE FICHIER
--------------------
-Point d'entrée principal du projet : enchaîne TOUTES les étapes du
-pipeline dans l'ordre, en dehors d'Airflow (utile pour tester en local
-ou pour une exécution manuelle rapide, ex: `python main.py`).
+from src.db.connection import init_db
+from src.llm.rule_generator import load_schema, generate_rules, save_rules
+from src.rules_engine.rule_engine import load_data, load_rules, run_all_rules
+from src.ml.train_model import train_and_save
+from src.ml.anomaly_detector import load_model, detect_anomalies, compare_with_rules
+from src.report.report_generator import build_report, export_json, export_html
+from src.alerting.notifier import should_alert, send_slack_alert, build_alert_message
 
-C'est la version "simplifiée" du DAG Airflow (airflow/dags/data_quality_dag.py)
-— la logique orchestrée est la même, mais ici tout tourne séquentiellement
-dans un seul process Python, sans scheduler.
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-CE QU'IL FAUT IMPLÉMENTER
---------------------------
-Un flux clair en 6 étapes, chacune loggée avec un timestamp :
+SLACK_WEBHOOK_URL = os.getenv('SLACK_WEBHOOK_URL')
 
-    1. Charger le schéma (schema/table_schema.json)
-    2. Générer les règles via le LLM (src/llm/rule_generator.py)
-       -> sauvegarde dans rules/generated_rules.json
-    3. Charger les données (data/sample_transactions.csv) et appliquer
-       les règles (src/rules_engine/rule_engine.py)
-    4. Charger le modèle ML et détecter les anomalies
-       (src/ml/anomaly_detector.py) — si le modèle n'existe pas encore,
-       appeler train_model.py d'abord
-    5. Construire le rapport consolidé (src/report/report_generator.py)
-       -> export JSON + HTML
-    6. Vérifier s'il faut alerter (src/alerting/notifier.py) et envoyer
-       l'alerte Slack si besoin
 
-SQUELETTE DE FLUX ATTENDU
-------------------------------
-    def main():
-        logging.info("Step 1/6 - Loading schema...")
-        schema = load_schema("schema/table_schema.json")
+def main():
+    try:
+        logger.info('Step 1/6 - Loading schema...')
+        schema = load_schema('schema/table_schema.json')
 
-        logging.info("Step 2/6 - Generating rules via LLM...")
-        rules = generate_rules(schema)
+        logger.info('Step 2/6 - Generating rules via LLM...')
+        try:
+            rules = generate_rules(schema)
+            save_rules(rules, 'rules/generated_rules.json')
+        except Exception as e:
+            logger.warning('Rule generation failed (%s); trying to load existing rules', e)
+            rules = load_rules('rules/generated_rules.json')
 
-        logging.info("Step 3/6 - Applying rules to data...")
-        df = load_data("data/sample_transactions.csv")
+        logger.info('Step 3/6 - Applying rules to data...')
+        df = load_data('data/sample_transactions.csv')
         rule_results = run_all_rules(df, rules)
 
-        logging.info("Step 4/6 - Detecting anomalies with ML...")
-        ml_results = detect_anomalies(df, load_model("models/isolation_forest.joblib"))
+        logger.info('Step 4/6 - Detecting anomalies with ML...')
+        try:
+            model = load_model('models/isolation_forest.joblib')
+        except Exception as e:
+            logger.warning('Model not found (%s); training model...', e)
+            train_and_save('data/sample_transactions.csv', 'models/isolation_forest.joblib')
+            model = load_model('models/isolation_forest.joblib')
+        ml_results = detect_anomalies(df, model)
 
-        logging.info("Step 5/6 - Building report...")
-        report = build_report(rule_results, ml_results)
-        export_json(report, "report/latest_report.json")
+        logger.info('Step 5/6 - Building report...')
+        report = build_report(rule_results, ml_results, total_rows=len(df))
+        cmp = compare_with_rules(ml_results, rule_results)
+        report['ml_anomalies']['not_covered_by_rules'] = cmp['not_covered_by_rules']
+        export_json(report, 'report/latest_report.json')
+        export_html(report, 'report/latest_report.html')
 
-        logging.info("Step 6/6 - Checking alert conditions...")
+        logger.info('Step 6/6 - Checking alert conditions...')
         if should_alert(report):
             send_slack_alert(build_alert_message(report), SLACK_WEBHOOK_URL)
 
-        logging.info("Pipeline completed successfully.")
+        logger.info('Pipeline completed successfully.')
+    except Exception as e:
+        logger.exception('Pipeline failed: %s', e)
+        raise
 
-    if __name__ == "__main__":
-        main()
 
-POINTS D'ATTENTION
--------------------
-- Configure le logging proprement en haut du fichier (niveau INFO,
-  format avec timestamp) — ça rend les logs lisibles en démo.
-- Enveloppe l'appel principal dans un `try/except` global qui logge
-  l'erreur complète (`logging.exception`) si le pipeline plante à une
-  étape, pour faciliter le debug.
-"""
-
-# TODO: import logging
-# TODO: importer les fonctions nécessaires depuis src/llm, src/rules_engine, src/ml, src/report, src/alerting
-# TODO: implémenter la fonction main() décrite ci-dessus
+if __name__ == '__main__':
+    init_db()
+    main()

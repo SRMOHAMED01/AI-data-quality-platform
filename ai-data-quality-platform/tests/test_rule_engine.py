@@ -1,52 +1,50 @@
-"""
-test_rule_engine.py
-=====================
+﻿import pytest
+import pandas as pd
+from src.rules_engine.rule_engine import apply_rule, run_all_rules
 
-RÔLE DE CE FICHIER
--------------------
-Tests unitaires (Pytest) pour src/rules_engine/rule_engine.py — vérifier
-que l'application des règles sur un DataFrame de test donne les bons
-résultats, SANS dépendre du LLM (pas d'appel API dans les tests).
 
-CE QU'IL FAUT IMPLÉMENTER
---------------------------
-1. Une fixture Pytest `sample_df` qui crée un petit DataFrame Pandas
-   codé en dur (5-10 lignes), avec des cas volontairement valides ET
-   invalides (montant négatif, email mal formé, etc.) — ça reproduit
-   data/sample_transactions.csv mais en mémoire pour isoler le test.
+@pytest.fixture
+def sample_df():
+    return pd.DataFrame({
+        'id': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        'amount': [100, -5, 0, 50, 200, -1, 10, 20, 30, 40],
+        'email': ['a@b.com', 'bad', 'c@d.com', 'e@f.com', 'g@h.com', 'i@j.com', 'k@l.com', 'm@n.com', 'o@p.com', 'q@r.com'],
+    })
 
-2. Une fixture `sample_rules` avec 2-3 règles codées en dur (pas besoin
-   du LLM ici), ex :
-       [{"column": "amount", "rule_sql": "amount >= 0", "severity": "high"}]
 
-3. `test_apply_rule_detects_violations()` :
-   vérifie qu'une règle "amount >= 0" détecte bien la ligne avec un
-   montant négatif dans `sample_df`.
+@pytest.fixture
+def sample_rules():
+    return [
+        {'column': 'amount', 'rule_sql': 'amount >= 0', 'severity': 'high'},
+        {'column': 'email', 'rule_sql': "email.str.contains('@')", 'severity': 'medium'},
+    ]
 
-4. `test_run_all_rules_returns_correct_structure()` :
-   vérifie que `run_all_rules()` retourne bien un dict avec les clés
-   attendues (pass, fail, conformity_pct, failed_rows) pour chaque règle.
 
-5. `test_conformity_percentage_calculation()` :
-   vérifie que le calcul du % de conformité est mathématiquement correct
-   (ex: 8 lignes conformes sur 10 → 80.0%).
+def test_apply_rule_detects_violations(sample_df):
+    rule = {'column': 'amount', 'rule_sql': 'amount >= 0', 'severity': 'high'}
+    mask = apply_rule(sample_df, rule)
+    assert mask.dtype == bool
+    assert mask.iloc[1] == False
+    assert mask.iloc[5] == False
 
-6. `test_invalid_rule_sql_does_not_crash_pipeline()` :
-   vérifie qu'une règle mal formée (rule_sql invalide, comme le LLM
-   pourrait en générer) est catchée proprement (log + skip) sans faire
-   planter tout le pipeline.
 
-COMMENT LANCER
-----------------
-    pytest tests/test_rule_engine.py -v
+def test_run_all_rules_returns_correct_structure(sample_df, sample_rules):
+    result = run_all_rules(sample_df, sample_rules)
+    assert 'amount >= 0' in result or 'email.str.contains(\'@\')' in result
+    for k, v in result.items():
+        assert 'pass' in v
+        assert 'fail' in v
+        assert 'conformity_pct' in v
+        assert 'failed_rows' in v
 
-POINTS D'ATTENTION
--------------------
-- Ne JAMAIS appeler l'API du LLM dans un test unitaire (coût, lenteur,
-  non-déterminisme) — toujours travailler avec des règles/données codées
-  en dur ou mockées.
-"""
 
-# TODO: import pytest, pandas as pd
-# TODO: from src.rules_engine.rule_engine import apply_rule, run_all_rules
-# TODO: implémenter les fixtures et tests décrits ci-dessus
+def test_conformity_percentage_calculation(sample_df, sample_rules):
+    result = run_all_rules(sample_df, [sample_rules[0]])
+    key = 'amount >= 0'
+    assert result[key]['conformity_pct'] == 80.0
+
+
+def test_invalid_rule_sql_does_not_crash_pipeline(sample_df):
+    rules = [{'column': 'amount', 'rule_sql': 'amount >> bad', 'severity': 'high'}]
+    result = run_all_rules(sample_df, rules)
+    assert isinstance(result, dict)
