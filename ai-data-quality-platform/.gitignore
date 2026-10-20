@@ -20,6 +20,9 @@ models/
 report/*.json
 report/*.html
 
+# Règles générées par le LLM (à régénérer via le pipeline)
+rules/generated_rules.json
+
 # Logs
 *.log
 

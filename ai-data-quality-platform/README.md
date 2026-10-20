@@ -1,105 +1,111 @@
 # AI-Augmented Data Quality & Anomaly Detection Platform
 
-> Plateforme qui combine **génération de règles de qualité par LLM** (Azure
-> OpenAI) et **détection d'anomalies par Machine Learning** (Isolation
-> Forest), orchestrée via Airflow, dockerisée, testée et intégrée en CI.
+Automated data quality validation that combines LLM-generated SQL rules with unsupervised Machine Learning (Isolation Forest) to catch both explicit violations and subtle anomalies static rules miss.
 
-## CE QU'IL RESTE À FAIRE DANS CE README
-- [ ] Remplacer ce paragraphe par un vrai résumé (2-3 phrases) du projet
-- [ ] Ajouter un schéma d'architecture (dessine-le avec draw.io / excalidraw,
-      exporte en PNG, mets-le dans `docs/architecture.png`, référence-le ici)
-- [ ] Ajouter un GIF ou des screenshots du dashboard une fois qu'il tourne
-- [ ] Ajouter le badge CI une fois que `.github/workflows/ci.yml` fonctionne :
-      `![CI](https://github.com/<user>/<repo>/actions/workflows/ci.yml/badge.svg)`
+## What it does
 
-## 🎯 Problème résolu
-Écrire manuellement des règles de validation de données pour chaque table
-est répétitif et lent. Ce projet automatise cette étape avec un LLM, tout
-en ajoutant une couche de détection d'anomalies par ML pour capter les
-problèmes que des règles statiques ne peuvent pas voir.
+1. **LLM rule generation** (Azure OpenAI / OpenAI): reads a table schema and business description, generates validation rules (column, SQL expression, severity).
+2. **Rule engine**: applies the rules against a dataset and computes a conformity percentage per rule, flagging failing rows.
+3. **ML anomaly detection**: trains an Isolation Forest on historical data and flags subtle anomalies no static rule would catch (e.g. unusual amount + country combinations).
+4. **Quality report**: consolidates rule results and ML anomalies into a JSON/HTML report, including the key metric — % of ML-detected anomalies not covered by the generated rules.
+5. **Alerting**: Slack/Teams webhook alerts when conformity drops below a threshold or anomalies are not covered by rules.
+6. **Dashboard**: Streamlit UI to explore the latest quality report.
+7. **Orchestration**: Apache Airflow DAG for scheduled daily runs.
 
-## 🏗️ Architecture
+## Stack
 
-```
-Schema + description métier
-        ↓
-[1] LLM (Azure OpenAI) génère des règles SQL de validation
-        ↓
-[2] Rule Engine applique les règles sur les données → % conformité
-        ↓
-[3] ML (Isolation Forest) détecte les anomalies subtiles non couvertes
-        ↓
-[4] Rapport consolidé (JSON/HTML) + sauvegarde en base (historique)
-        ↓
-[5] Alerting (Slack) si seuil de qualité franchi
-        ↓
-[6] Dashboard Streamlit pour explorer les résultats
-```
-Le tout est orchestré par **Airflow** (exécution planifiée quotidienne) et
-packagé avec **Docker Compose** (app + PostgreSQL + dashboard).
-
-## 🛠️ Stack technique
-| Composant | Technologie |
+| Component | Technology |
 |---|---|
-| LLM | Azure OpenAI |
+| LLM | Azure OpenAI / OpenAI |
 | ML | scikit-learn (Isolation Forest) |
-| Orchestration | Apache Airflow |
-| Base de données | PostgreSQL + SQLAlchemy |
+| Data | pandas, SQLAlchemy, PostgreSQL |
 | Dashboard | Streamlit |
+| Orchestration | Apache Airflow |
 | Tests | Pytest |
 | CI/CD | GitHub Actions |
-| Conteneurisation | Docker / Docker Compose |
+| Container | Docker / Docker Compose |
 
-## 📁 Structure du projet
-Voir l'arborescence complète dans le repo. Chaque fichier `.py` commence
-par une docstring expliquant précisément son rôle et ce qu'il faut y
-implémenter — utile si tu reprends le projet plus tard ou si tu veux
-comprendre rapidement où intervient chaque brique.
+## Project structure
 
-## 🚀 Comment lancer le projet
-
-### 1. Setup initial
-```bash
-git clone <ton-repo>
-cd ai-data-quality-platform
-cp .env .env.local   # puis remplis .env avec tes vraies valeurs (clé API, DB...)
-pip install -r requirements.txt
+```
+ai-data-quality-platform/
+├── main.py                      # Local pipeline entry point (6 steps)
+├── requirements.txt             # Python dependencies
+├── Dockerfile                   # App image
+├── docker-compose.yml           # App + PostgreSQL + dashboard
+├── .env.example                 # Environment variables template
+├── README.md                    # This file
+├── schema/table_schema.json     # Table schema + business description (sent to the LLM)
+├── data/sample_transactions.csv # Sample dataset
+├── src/
+│   ├── db/                      # PostgreSQL connection + ORM models (connection, models)
+│   ├── llm/                     # LLM client, prompt templates, rule generator
+│   ├── rules_engine/            # Rule loading, application, conformity computation
+│   ├── ml/                      # Model training (Isolation Forest) + anomaly detection
+│   ├── report/                  # Quality report builder (JSON / HTML export)
+│   └── alerting/                # Slack / Teams alerts + alert decision logic
+├── dashboard/app.py             # Streamlit dashboard
+├── airflow/dags/data_quality_dag.py  # Scheduled Airflow DAG
+└── tests/                       # Pytest unit tests (mocked, no real API calls)
 ```
 
-### 2. Lancer avec Docker Compose (recommandé)
+## How to run
+
+### Locally (no Docker)
+
 ```bash
+git clone <your-repo>
+cd ai-data-quality-platform
+cp .env.example .env   # fill in your Azure OpenAI / OpenAI keys and Slack webhook
+pip install -r requirements.txt
+python main.py         # runs the full pipeline: rules -> conformity -> ML -> report -> alert
+streamlit run dashboard/app.py   # open http://localhost:8501
+```
+
+### With Docker Compose (recommended)
+
+```bash
+cp .env.example .env   # fill in your values
 docker compose up --build
 ```
-- App/pipeline : exécuté par le service `app`
-- Dashboard : http://localhost:8501
-- PostgreSQL : localhost:5432
 
-### 3. Lancer manuellement (sans Docker)
+- Pipeline / app: service `app`
+- Dashboard: http://localhost:8501
+- PostgreSQL: localhost:5432
+
+## Tests
+
 ```bash
-python main.py                        # exécute le pipeline complet
-streamlit run dashboard/app.py        # lance le dashboard
+pytest tests/ -v
 ```
 
-### 4. Lancer les tests
-```bash
-pytest tests/ -v --cov=src
-```
+Tests are mocked — they never call the real LLM API, so they are fast, free, and deterministic.
 
-## 📊 Résultat clé à mettre en avant
-> "Le modèle ML a détecté **X%** d'anomalies non couvertes par les règles
-> générées par le LLM" — cette métrique (calculée par
-> `compare_with_rules()` dans `src/ml/anomaly_detector.py`) est LE point
-> différenciant du projet à montrer en entretien : elle prouve la valeur
-> ajoutée de combiner règles explicites (LLM) et détection statistique (ML).
+## Key metric to highlight
 
-## 🗺️ Roadmap de développement (pour toi, pas pour le README final)
-1. Setup + schema + dataset
-2. Génération de règles via LLM
-3. Rule engine (application des règles)
-4. Entraînement + détection d'anomalies ML
-5. Orchestration Airflow
-6. Dashboard + alerting
-7. Tests + CI/CD + polish final
+The report computes how many ML-detected anomalies were **not covered** by the LLM-generated rules:
 
-## 📄 Licence
-MIT (ou à adapter selon ton choix)
+> "The ML model detected X% of anomalies not covered by the static rules generated by the LLM."
+
+This is the differentiator that proves the value of combining explicit rules with statistical anomaly detection.
+
+## Environment variables
+
+Copy `.env.example` to `.env` and fill:
+
+| Variable | Purpose |
+|---|---|
+| `LLM_PROVIDER` | `azure` or `openai` |
+| `AZURE_OPENAI_API_KEY` / `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_DEPLOYMENT` | Azure OpenAI credentials |
+| `OPENAI_API_KEY` / `OPENAI_MODEL` | Direct OpenAI credentials |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `SLACK_WEBHOOK_URL` | Slack incoming webhook |
+| `TEAMS_WEBHOOK_URL` | Microsoft Teams webhook |
+
+## CI
+
+GitHub Actions workflow (`.github/workflows/ci.yml`) installs dependencies and runs the test suite on every push.
+
+## License
+
+MIT
