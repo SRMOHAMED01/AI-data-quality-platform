@@ -12,7 +12,20 @@ Automated data quality validation that combines LLM-generated SQL rules with uns
 6. **Dashboard**: Streamlit UI to explore the latest quality report.
 7. **Orchestration**: Apache Airflow DAG for scheduled daily runs.
 
-## Stack
+## Architecture
+
+```mermaid
+flowchart TD
+    A[Schema + business description] --> B[LLM generates validation rules]
+    B --> C[Rule Engine applies rules on data]
+    C --> D[Conformity % per rule]
+    D --> E[ML Isolation Forest anomaly detection]
+    E --> F[Compare: ML anomalies not covered by rules]
+    F --> G[Consolidated JSON/HTML report]
+    G --> H[Slack/Teams alert if threshold breached]
+    G --> I[Streamlit dashboard]
+```
+
 
 | Component | Technology |
 |---|---|
